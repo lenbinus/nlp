@@ -1,0 +1,14 @@
+# N-gram Language Model Dependencies
+
+# Core
+nltk>=3.8.0
+numpy>=1.21.0
+
+# Terminal UI
+rich>=13.0.0
+
+# Web Dashboard
+flask>=2.3.0
+
+# Optional: for better performance
+# cython>=0.29.0

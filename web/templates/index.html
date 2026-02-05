@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N-gram Language Model Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-diagram-3"></i> N-gram Language Model
+            </a>
+            <div class="navbar-text text-light" id="model-status">
+                <span class="badge bg-secondary">No Model</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-3">
+        <div class="row">
+            <!-- Left Panel: Training Configuration -->
+            <div class="col-md-3">
+                <div class="card mb-3">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-gear"></i> Training Configuration
+                    </div>
+                    <div class="card-body">
+                        <form id="training-form">
+                            <div class="mb-3">
+                                <label class="form-label">N-gram Order (n)</label>
+                                <select class="form-select" id="n-value">
+                                    <option value="1">1 (Unigram)</option>
+                                    <option value="2">2 (Bigram)</option>
+                                    <option value="3" selected>3 (Trigram)</option>
+                                    <option value="4">4 (4-gram)</option>
+                                    <option value="5">5 (5-gram)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Smoothing Method</label>
+                                <select class="form-select" id="smoothing">
+                                    {% for method in smoothing_methods %}
+                                    <option value="{{ method }}" {% if method == 'laplace' %}selected{% endif %}>
+                                        {{ method.replace('_', ' ').title() }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Corpus Categories</label>
+                                <select class="form-select" id="categories" multiple size="5">
+                                    {% for cat in categories %}
+                                    <option value="{{ cat }}">{{ cat }}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Hold Ctrl/Cmd to select multiple. Leave empty for all.</small>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Min Word Count</label>
+                                <input type="number" class="form-control" id="min-count" value="2" min="1">
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-100" id="train-btn">
+                                <i class="bi bi-play-fill"></i> Start Training
+                            </button>
+                        </form>
+                        
+                        <!-- Progress -->
+                        <div id="training-progress" class="mt-3" style="display: none;">
+                            <div class="progress mb-2">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     id="progress-bar" style="width: 0%"></div>
+                            </div>
+                            <small class="text-muted" id="progress-text">Initializing...</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Model Statistics -->
+                <div class="card" id="stats-card" style="display: none;">
+                    <div class="card-header bg-success text-white">
+                        <i class="bi bi-bar-chart"></i> Model Statistics
+                    </div>
+                    <div class="card-body" id="stats-body">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Center Panel: Visualization -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-diagram-3"></i> Prediction Tree</span>
+                        <div>
+                            <label class="me-2">Depth:</label>
+                            <select class="form-select form-select-sm d-inline-block" style="width: auto;" id="tree-depth">
+                                <option value="2">2</option>
+                                <option value="3" selected>3</option>
+                                <option value="4">4</option>
+                            </select>
+                            <label class="ms-3 me-2">Branches:</label>
+                            <select class="form-select form-select-sm d-inline-block" style="width: auto;" id="tree-branching">
+                                <option value="3">3</option>
+                                <option value="5" selected>5</option>
+                                <option value="7">7</option>
+                                <option value="10">10</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="tree-container"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Panel: Word Selection & Generation -->
+            <div class="col-md-3">
+                <!-- Top Words -->
+                <div class="card mb-3">
+                    <div class="card-header bg-warning">
+                        <i class="bi bi-list-ol"></i> Top Words (click to explore)
+                    </div>
+                    <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                        <div id="top-words-list">
+                            <p class="text-muted">Train a model to see top words</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Text Generation -->
+                <div class="card mb-3">
+                    <div class="card-header bg-purple text-white" style="background-color: #6f42c1;">
+                        <i class="bi bi-pencil"></i> Text Generation
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Starting Context</label>
+                            <input type="text" class="form-control" id="gen-context" 
+                                   placeholder="e.g., the man">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Temperature</label>
+                            <input type="range" class="form-range" id="temperature" 
+                                   min="0.1" max="2" step="0.1" value="1">
+                            <small class="text-muted">Value: <span id="temp-value">1.0</span></small>
+                        </div>
+                        <button class="btn btn-primary w-100" id="generate-btn" disabled>
+                            <i class="bi bi-magic"></i> Generate
+                        </button>
+                        <div class="mt-3" id="generated-text" style="display: none;">
+                            <label class="form-label">Generated Text:</label>
+                            <div class="alert alert-light" id="generated-output"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Prediction -->
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <i class="bi bi-lightbulb"></i> Next Word Prediction
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Context</label>
+                            <input type="text" class="form-control" id="predict-context" 
+                                   placeholder="e.g., the quick brown">
+                        </div>
+                        <button class="btn btn-secondary w-100" id="predict-btn" disabled>
+                            <i class="bi bi-search"></i> Predict
+                        </button>
+                        <div class="mt-3" id="predictions" style="display: none;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip-custom"></div>
+
+    <script src="/static/js/tree.js"></script>
+    <script>
+        // State
+        let modelReady = false;
+        let currentWord = 'the';
+        
+        // DOM elements
+        const trainingForm = document.getElementById('training-form');
+        const trainBtn = document.getElementById('train-btn');
+        const progressDiv = document.getElementById('training-progress');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const statsCard = document.getElementById('stats-card');
+        const statsBody = document.getElementById('stats-body');
+        const modelStatus = document.getElementById('model-status');
+        const topWordsList = document.getElementById('top-words-list');
+        const generateBtn = document.getElementById('generate-btn');
+        const predictBtn = document.getElementById('predict-btn');
+        
+        // Temperature slider
+        const tempSlider = document.getElementById('temperature');
+        const tempValue = document.getElementById('temp-value');
+        tempSlider.addEventListener('input', () => {
+            tempValue.textContent = tempSlider.value;
+        });
+        
+        // Training form submit
+        trainingForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const n = parseInt(document.getElementById('n-value').value);
+            const smoothing = document.getElementById('smoothing').value;
+            const categoriesSelect = document.getElementById('categories');
+            const categories = Array.from(categoriesSelect.selectedOptions).map(o => o.value);
+            const minCount = parseInt(document.getElementById('min-count').value);
+            
+            trainBtn.disabled = true;
+            progressDiv.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressText.textContent = 'Starting...';
+            
+            try {
+                const response = await fetch('/api/train', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        n: n,
+                        smoothing: smoothing,
+                        categories: categories.length > 0 ? categories : null,
+                        min_count: minCount
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Training request failed');
+                }
+                
+                // Poll for status
+                pollTrainingStatus();
+                
+            } catch (error) {
+                alert('Error: ' + error.message);
+                trainBtn.disabled = false;
+                progressDiv.style.display = 'none';
+            }
+        });
+        
+        // Poll training status
+        async function pollTrainingStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const status = await response.json();
+                
+                progressBar.style.width = status.progress + '%';
+                progressText.textContent = status.message;
+                
+                if (status.error) {
+                    alert('Training error: ' + status.error);
+                    trainBtn.disabled = false;
+                    progressDiv.style.display = 'none';
+                    return;
+                }
+                
+                if (status.is_training) {
+                    setTimeout(pollTrainingStatus, 500);
+                } else if (status.stage === 'complete') {
+                    // Training complete
+                    trainBtn.disabled = false;
+                    modelReady = true;
+                    modelStatus.innerHTML = '<span class="badge bg-success">Model Ready</span>';
+                    
+                    // Show stats
+                    displayStats(status.stats);
+                    
+                    // Load top words
+                    loadTopWords();
+                    
+                    // Enable buttons
+                    generateBtn.disabled = false;
+                    predictBtn.disabled = false;
+                    
+                    // Initial tree
+                    updateTree('the');
+                }
+                
+            } catch (error) {
+                console.error('Status poll error:', error);
+                setTimeout(pollTrainingStatus, 1000);
+            }
+        }
+        
+        // Display statistics
+        function displayStats(stats) {
+            statsCard.style.display = 'block';
+            
+            let html = '<table class="table table-sm">';
+            for (const [key, value] of Object.entries(stats)) {
+                const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                let displayValue = value;
+                if (typeof value === 'number') {
+                    displayValue = value.toLocaleString();
+                }
+                html += `<tr><td>${displayKey}</td><td class="text-end"><strong>${displayValue}</strong></td></tr>`;
+            }
+            html += '</table>';
+            
+            statsBody.innerHTML = html;
+        }
+        
+        // Load top words
+        async function loadTopWords() {
+            try {
+                const response = await fetch('/api/top_words?k=50');
+                const words = await response.json();
+                
+                let html = '';
+                words.forEach((item, index) => {
+                    html += `
+                        <span class="badge bg-light text-dark me-1 mb-1 word-badge" 
+                              data-word="${item.word}"
+                              style="cursor: pointer; font-size: ${Math.max(12, 18 - index/5)}px;">
+                            ${item.word}
+                        </span>`;
+                });
+                
+                topWordsList.innerHTML = html;
+                
+                // Add click handlers
+                document.querySelectorAll('.word-badge').forEach(badge => {
+                    badge.addEventListener('click', () => {
+                        currentWord = badge.dataset.word;
+                        updateTree(currentWord);
+                    });
+                });
+                
+            } catch (error) {
+                console.error('Error loading top words:', error);
+            }
+        }
+        
+        // Update tree visualization
+        async function updateTree(word) {
+            if (!modelReady) return;
+            
+            const depth = parseInt(document.getElementById('tree-depth').value);
+            const branching = parseInt(document.getElementById('tree-branching').value);
+            
+            try {
+                const response = await fetch(`/api/tree?word=${encodeURIComponent(word)}&depth=${depth}&branching=${branching}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error(data.error);
+                    return;
+                }
+                
+                renderTree(data);
+                
+            } catch (error) {
+                console.error('Error loading tree:', error);
+            }
+        }
+        
+        // Tree controls change
+        document.getElementById('tree-depth').addEventListener('change', () => updateTree(currentWord));
+        document.getElementById('tree-branching').addEventListener('change', () => updateTree(currentWord));
+        
+        // Generate text
+        generateBtn.addEventListener('click', async () => {
+            const context = document.getElementById('gen-context').value;
+            const temperature = parseFloat(tempSlider.value);
+            
+            try {
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        context: context,
+                        max_length: 30,
+                        temperature: temperature
+                    })
+                });
+                
+                const result = await response.json();
+                
+                document.getElementById('generated-text').style.display = 'block';
+                document.getElementById('generated-output').innerHTML = 
+                    (context ? `<em>${context}</em> ` : '') + 
+                    `<strong>${result.text}</strong>`;
+                
+            } catch (error) {
+                console.error('Generation error:', error);
+            }
+        });
+        
+        // Predict next word
+        predictBtn.addEventListener('click', async () => {
+            const context = document.getElementById('predict-context').value;
+            
+            try {
+                const response = await fetch(`/api/predict?context=${encodeURIComponent(context)}&k=10`);
+                const result = await response.json();
+                
+                let html = '<ul class="list-group">';
+                result.predictions.forEach(pred => {
+                    const pct = (pred.probability * 100).toFixed(2);
+                    html += `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            ${pred.word}
+                            <span class="badge bg-primary rounded-pill">${pct}%</span>
+                        </li>`;
+                });
+                html += '</ul>';
+                
+                document.getElementById('predictions').style.display = 'block';
+                document.getElementById('predictions').innerHTML = html;
+                
+            } catch (error) {
+                console.error('Prediction error:', error);
+            }
+        });
+        
+        // Check for existing model on load
+        async function checkModel() {
+            try {
+                const response = await fetch('/api/model/info');
+                if (response.ok) {
+                    const info = await response.json();
+                    if (info.is_trained) {
+                        modelReady = true;
+                        modelStatus.innerHTML = '<span class="badge bg-success">Model Ready</span>';
+                        displayStats(info.stats);
+                        loadTopWords();
+                        generateBtn.disabled = false;
+                        predictBtn.disabled = false;
+                        updateTree('the');
+                    }
+                }
+            } catch (error) {
+                console.log('No existing model');
+            }
+        }
+        
+        checkModel();
+    </script>
+</body>
+</html>
