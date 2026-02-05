@@ -1,0 +1,88 @@
+/* Tokenization Visualization Styles */
+
+body {
+    background-color: #f8f9fa;
+}
+
+.card {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border: none;
+}
+
+.card-header {
+    font-weight: 600;
+}
+
+/* Token badges */
+.badge {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-weight: normal;
+}
+
+/* Steps visualization */
+.step-item {
+    background: #fff;
+    transition: all 0.2s ease;
+}
+
+.step-item:hover {
+    background: #f8f9fa;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.step-item code {
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.85em;
+}
+
+/* Comparison table */
+#comparison-results .table {
+    margin-bottom: 0;
+}
+
+#comparison-results td {
+    vertical-align: middle;
+}
+
+/* Vocabulary list */
+#vocab-list .badge {
+    font-size: 0.8em;
+    cursor: default;
+}
+
+#vocab-list .badge:hover {
+    background-color: #dee2e6 !important;
+}
+
+/* Accordion customization */
+.accordion-button:not(.collapsed) {
+    background-color: #e7f1ff;
+    color: #0c63e4;
+}
+
+/* Progress bar */
+.progress {
+    height: 8px;
+}
+
+/* Trained tokenizers badges */
+#trained-list .badge {
+    font-size: 0.9em;
+}
+
+/* Input textarea */
+#input-text {
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* Method info */
+.accordion-body ul {
+    margin-bottom: 0.5rem;
+    padding-left: 1.2rem;
+}
+
+.accordion-body li {
+    margin-bottom: 0.25rem;
+}

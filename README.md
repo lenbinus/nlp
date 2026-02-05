@@ -7,6 +7,7 @@ A collection of educational NLP implementations with interactive visualizations.
 | Project | Description |
 |---------|-------------|
 | [**ngrams/**](ngrams/) | N-gram language models with smoothing and interactive tree visualization |
+| [**tokenization/**](tokenization/) | BPE, WordPiece, and Unigram tokenizers with step-by-step visualization |
 
 ## Getting Started
 

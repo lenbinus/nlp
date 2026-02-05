@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tokenization Visualization</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-braces"></i> Tokenization Visualization
+            </a>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-3">
+        <div class="row">
+            <!-- Left Panel: Training -->
+            <div class="col-md-3">
+                <div class="card mb-3">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-gear"></i> Train Tokenizers
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Method</label>
+                            <select class="form-select" id="train-method">
+                                <option value="bpe">BPE (Byte Pair Encoding)</option>
+                                <option value="wordpiece">WordPiece</option>
+                                <option value="unigram">Unigram LM</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Vocabulary Size</label>
+                            <input type="number" class="form-control" id="vocab-size" value="500" min="100" max="5000">
+                        </div>
+                        <button class="btn btn-primary w-100 mb-2" id="train-btn">
+                            <i class="bi bi-play-fill"></i> Train
+                        </button>
+                        <button class="btn btn-outline-primary w-100" id="train-all-btn">
+                            <i class="bi bi-collection-play"></i> Train All Methods
+                        </button>
+                        
+                        <div id="training-progress" class="mt-3" style="display: none;">
+                            <div class="progress mb-2">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     id="progress-bar" style="width: 0%"></div>
+                            </div>
+                            <small class="text-muted" id="progress-text">Training...</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Trained Tokenizers -->
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <i class="bi bi-check-circle"></i> Trained Tokenizers
+                    </div>
+                    <div class="card-body" id="trained-list">
+                        <p class="text-muted">No tokenizers trained yet</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Center Panel: Tokenization -->
+            <div class="col-md-6">
+                <!-- Input -->
+                <div class="card mb-3">
+                    <div class="card-header bg-info text-white">
+                        <i class="bi bi-pencil"></i> Input Text
+                    </div>
+                    <div class="card-body">
+                        <textarea class="form-control" id="input-text" rows="2" 
+                                  placeholder="Enter text to tokenize...">The transformer architecture has revolutionized natural language processing.</textarea>
+                        <div class="mt-2">
+                            <button class="btn btn-info" id="tokenize-btn">
+                                <i class="bi bi-scissors"></i> Tokenize
+                            </button>
+                            <button class="btn btn-outline-info" id="compare-btn">
+                                <i class="bi bi-arrows-angle-expand"></i> Compare All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Comparison View -->
+                <div class="card mb-3" id="comparison-card" style="display: none;">
+                    <div class="card-header bg-warning">
+                        <i class="bi bi-bar-chart"></i> Method Comparison
+                    </div>
+                    <div class="card-body" id="comparison-results">
+                    </div>
+                </div>
+                
+                <!-- Step-by-Step Visualization -->
+                <div class="card" id="steps-card" style="display: none;">
+                    <div class="card-header bg-secondary text-white d-flex justify-content-between">
+                        <span><i class="bi bi-list-ol"></i> Tokenization Steps</span>
+                        <select class="form-select form-select-sm" style="width: auto;" id="step-method">
+                        </select>
+                    </div>
+                    <div class="card-body" id="steps-container">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Panel: Info & Vocabulary -->
+            <div class="col-md-3">
+                <!-- Method Info -->
+                <div class="card mb-3">
+                    <div class="card-header bg-purple text-white" style="background-color: #6f42c1;">
+                        <i class="bi bi-info-circle"></i> About Methods
+                    </div>
+                    <div class="card-body" id="method-info">
+                        <div class="accordion" id="methodAccordion">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Vocabulary Sample -->
+                <div class="card" id="vocab-card" style="display: none;">
+                    <div class="card-header bg-dark text-white">
+                        <i class="bi bi-book"></i> Vocabulary Sample
+                    </div>
+                    <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                        <div id="vocab-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let trainedMethods = {};
+        
+        // Elements
+        const trainBtn = document.getElementById('train-btn');
+        const trainAllBtn = document.getElementById('train-all-btn');
+        const tokenizeBtn = document.getElementById('tokenize-btn');
+        const compareBtn = document.getElementById('compare-btn');
+        const progressDiv = document.getElementById('training-progress');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        
+        // Load method info on start
+        async function loadMethodInfo() {
+            const response = await fetch('/api/info');
+            const data = await response.json();
+            
+            let html = '';
+            data.methods.forEach((method, idx) => {
+                html += `
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button ${idx > 0 ? 'collapsed' : ''}" type="button" 
+                                    data-bs-toggle="collapse" data-bs-target="#method${idx}">
+                                ${method.name}
+                            </button>
+                        </h2>
+                        <div id="method${idx}" class="accordion-collapse collapse ${idx === 0 ? 'show' : ''}"
+                             data-bs-parent="#methodAccordion">
+                            <div class="accordion-body">
+                                <p>${method.description}</p>
+                                <strong class="text-success">Pros:</strong>
+                                <ul class="small">${method.pros.map(p => `<li>${p}</li>`).join('')}</ul>
+                                <strong class="text-danger">Cons:</strong>
+                                <ul class="small">${method.cons.map(c => `<li>${c}</li>`).join('')}</ul>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('methodAccordion').innerHTML = html;
+        }
+        
+        // Train single tokenizer
+        trainBtn.addEventListener('click', async () => {
+            const method = document.getElementById('train-method').value;
+            const vocabSize = parseInt(document.getElementById('vocab-size').value);
+            
+            await trainTokenizer(method, vocabSize);
+        });
+        
+        // Train all tokenizers
+        trainAllBtn.addEventListener('click', async () => {
+            const vocabSize = parseInt(document.getElementById('vocab-size').value);
+            
+            for (const method of ['bpe', 'wordpiece', 'unigram']) {
+                await trainTokenizer(method, vocabSize);
+            }
+        });
+        
+        async function trainTokenizer(method, vocabSize) {
+            trainBtn.disabled = true;
+            trainAllBtn.disabled = true;
+            progressDiv.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressText.textContent = `Training ${method}...`;
+            
+            try {
+                await fetch('/api/train', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ method, vocab_size: vocabSize })
+                });
+                
+                // Poll for completion
+                await pollTrainingStatus();
+                
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+            
+            trainBtn.disabled = false;
+            trainAllBtn.disabled = false;
+        }
+        
+        async function pollTrainingStatus() {
+            const response = await fetch('/api/status');
+            const status = await response.json();
+            
+            progressBar.style.width = status.progress + '%';
+            progressText.textContent = status.message;
+            
+            if (status.error) {
+                alert('Training error: ' + status.error);
+                progressDiv.style.display = 'none';
+                return;
+            }
+            
+            if (status.is_training) {
+                setTimeout(pollTrainingStatus, 300);
+            } else {
+                progressDiv.style.display = 'none';
+                await loadTrainedTokenizers();
+            }
+        }
+        
+        async function loadTrainedTokenizers() {
+            const response = await fetch('/api/tokenizers');
+            trainedMethods = await response.json();
+            
+            const container = document.getElementById('trained-list');
+            const stepSelect = document.getElementById('step-method');
+            
+            if (Object.keys(trainedMethods).length === 0) {
+                container.innerHTML = '<p class="text-muted">No tokenizers trained yet</p>';
+                return;
+            }
+            
+            let html = '';
+            let selectHtml = '';
+            
+            for (const [key, info] of Object.entries(trainedMethods)) {
+                html += `
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="badge bg-success">${info.name}</span>
+                        <small class="text-muted">${info.vocab_size} tokens</small>
+                    </div>
+                `;
+                selectHtml += `<option value="${key}">${info.name}</option>`;
+            }
+            
+            container.innerHTML = html;
+            stepSelect.innerHTML = selectHtml;
+            
+            document.getElementById('vocab-card').style.display = 'block';
+            loadVocab(Object.keys(trainedMethods)[0]);
+        }
+        
+        async function loadVocab(method) {
+            const response = await fetch(`/api/vocab?method=${method}&limit=50`);
+            const data = await response.json();
+            
+            let html = '<div class="d-flex flex-wrap gap-1">';
+            for (const [token, id] of data.vocab_sample) {
+                const display = token.replace(/▁/g, '␣').replace(/Ġ/g, '␣');
+                html += `<span class="badge bg-light text-dark border" title="ID: ${id}">${display}</span>`;
+            }
+            html += '</div>';
+            
+            document.getElementById('vocab-list').innerHTML = html;
+        }
+        
+        // Tokenize
+        tokenizeBtn.addEventListener('click', async () => {
+            const text = document.getElementById('input-text').value;
+            const method = document.getElementById('step-method').value;
+            
+            if (!method) {
+                alert('Please train a tokenizer first');
+                return;
+            }
+            
+            const response = await fetch('/api/tokenize', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ text, method })
+            });
+            
+            const data = await response.json();
+            displaySteps(data);
+        });
+        
+        // Compare all
+        compareBtn.addEventListener('click', async () => {
+            const text = document.getElementById('input-text').value;
+            
+            if (Object.keys(trainedMethods).length === 0) {
+                alert('Please train tokenizers first');
+                return;
+            }
+            
+            const response = await fetch('/api/compare', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ text })
+            });
+            
+            const data = await response.json();
+            displayComparison(data);
+        });
+        
+        function displaySteps(data) {
+            const card = document.getElementById('steps-card');
+            const container = document.getElementById('steps-container');
+            card.style.display = 'block';
+            
+            let html = `
+                <div class="mb-3">
+                    <strong>Result:</strong> ${data.num_tokens} tokens
+                    <div class="d-flex flex-wrap gap-1 mt-2">
+                        ${data.tokens.map(t => {
+                            const display = t.replace(/▁/g, '␣').replace(/Ġ/g, '␣').replace(/##/g, '##');
+                            return `<span class="badge bg-primary">${display}</span>`;
+                        }).join('')}
+                    </div>
+                </div>
+                <hr>
+                <strong>Steps:</strong>
+                <div class="steps-list mt-2">
+            `;
+            
+            data.steps.forEach((step, idx) => {
+                const tokens = step.tokens.map(t => 
+                    t.replace(/▁/g, '␣').replace(/Ġ/g, '␣')
+                ).join(' | ');
+                
+                let badgeClass = 'bg-secondary';
+                if (step.type === 'merge') badgeClass = 'bg-success';
+                if (step.type === 'match') badgeClass = 'bg-info';
+                if (step.type === 'final') badgeClass = 'bg-primary';
+                
+                html += `
+                    <div class="step-item mb-2 p-2 border rounded">
+                        <span class="badge ${badgeClass} me-2">${step.type}</span>
+                        <span>${step.description}</span>
+                        <div class="text-muted small mt-1">
+                            <code>${tokens}</code>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+        
+        function displayComparison(data) {
+            const card = document.getElementById('comparison-card');
+            const container = document.getElementById('comparison-results');
+            card.style.display = 'block';
+            
+            let html = '<table class="table table-sm"><thead><tr><th>Method</th><th>Tokens</th><th>#</th></tr></thead><tbody>';
+            
+            for (const [method, result] of Object.entries(data)) {
+                const tokens = result.tokens.map(t => {
+                    const display = t.replace(/▁/g, '␣').replace(/Ġ/g, '␣').replace(/##/g, '##');
+                    return `<span class="badge bg-light text-dark border me-1">${display}</span>`;
+                }).join('');
+                
+                html += `
+                    <tr>
+                        <td><strong>${result.name}</strong></td>
+                        <td>${tokens}</td>
+                        <td><span class="badge bg-primary">${result.num_tokens}</span></td>
+                    </tr>
+                `;
+            }
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+        
+        // Update vocab when method changes
+        document.getElementById('step-method').addEventListener('change', (e) => {
+            loadVocab(e.target.value);
+        });
+        
+        // Initialize
+        loadMethodInfo();
+        loadTrainedTokenizers();
+    </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

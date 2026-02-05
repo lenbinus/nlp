@@ -1,0 +1,4 @@
+# Tokenization Project Dependencies
+
+# Web dashboard
+flask>=2.3.0
