@@ -136,8 +136,9 @@ function renderTree(data) {
         .text(d => d.data.name)
         .attr('font-size', d => d.depth === 0 ? '14px' : '11px')
         .attr('font-weight', d => d.depth === 0 ? 'bold' : 'normal')
+        .attr('fill', '#333')
         .clone(true).lower()
-        .attr('stroke', 'rgba(0,0,0,0.8)')
+        .attr('stroke', '#fff')
         .attr('stroke-width', 3);
     
     // Add probability labels for non-root nodes
@@ -149,7 +150,7 @@ function renderTree(data) {
         .attr('transform', d => d.x >= Math.PI ? 'rotate(180)' : null)
         .text(d => (d.data.probability * 100).toFixed(1) + '%')
         .attr('font-size', '9px')
-        .attr('fill', '#aaa');
+        .attr('fill', '#666');
 }
 
 // Mouse over handler
