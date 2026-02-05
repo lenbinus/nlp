@@ -1,16 +1,15 @@
 /* N-gram Language Model Dashboard Styles */
 
-html, body {
-    height: 100%;
+body {
     background-color: #f8f9fa;
 }
 
-.container-fluid {
-    height: calc(100vh - 56px);
+.navbar {
+    padding: 0.5rem 1rem;
 }
 
-.container-fluid > .row {
-    height: 100%;
+#tree-container {
+    min-height: 550px;
 }
 
 .card {

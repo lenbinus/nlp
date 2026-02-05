@@ -197,9 +197,11 @@ function handleMouseOut(event, d) {
 function handleClick(event, d) {
     if (d.depth === 0) return;  // Don't re-click root
     
-    // Update tree with clicked word as root
-    currentWord = d.data.name;
-    updateTree(d.data.name);
+    // Update tree with clicked word as root (updateTree is defined in index.html)
+    if (typeof updateTree === 'function') {
+        currentWord = d.data.name;
+        updateTree(d.data.name, true);  // true = add to path
+    }
 }
 
 // Handle window resize

@@ -96,8 +96,8 @@
             </div>
             
             <!-- Center Panel: Visualization -->
-            <div class="col-md-6 d-flex flex-column">
-                <div class="card flex-grow-1 d-flex flex-column">
+            <div class="col-md-6">
+                <div class="card">
                     <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
                         <span><i class="bi bi-diagram-3"></i> Prediction Tree</span>
                         <div>
@@ -116,7 +116,21 @@
                             </select>
                         </div>
                     </div>
-                    <div class="card-body p-0 flex-grow-1" style="min-height: 600px;">
+                    <!-- N-gram Path Display -->
+                    <div class="card-body py-2 border-bottom" id="ngram-path-container">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong class="me-2">N-gram Path:</strong>
+                                <span id="ngram-path" class="text-primary">
+                                    <em class="text-muted">Click a word to start</em>
+                                </span>
+                            </div>
+                            <button class="btn btn-sm btn-outline-secondary" id="reset-ngram-btn" title="Reset n-gram path">
+                                <i class="bi bi-arrow-counterclockwise"></i> Reset
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
                         <div id="tree-container"></div>
                     </div>
                 </div>
@@ -193,6 +207,7 @@
         // State
         let modelReady = false;
         let currentWord = 'the';
+        let ngramPath = [];  // Track selected words for n-gram context
         
         // DOM elements
         const trainingForm = document.getElementById('training-form');
@@ -289,8 +304,8 @@
                     generateBtn.disabled = false;
                     predictBtn.disabled = false;
                     
-                    // Initial tree
-                    updateTree('the');
+                    // Initial tree (reset path and start fresh)
+                    resetNgramPath();
                 }
                 
             } catch (error) {
@@ -338,8 +353,10 @@
                 // Add click handlers
                 document.querySelectorAll('.word-badge').forEach(badge => {
                     badge.addEventListener('click', () => {
+                        // Reset path and start fresh with clicked word
+                        ngramPath = [];
                         currentWord = badge.dataset.word;
-                        updateTree(currentWord);
+                        updateTree(currentWord, true);
                     });
                 });
                 
@@ -349,14 +366,23 @@
         }
         
         // Update tree visualization
-        async function updateTree(word) {
+        async function updateTree(word, addToPath = true) {
             if (!modelReady) return;
+            
+            // Update n-gram path
+            if (addToPath && word) {
+                ngramPath.push(word);
+            }
+            updateNgramPathDisplay();
             
             const depth = parseInt(document.getElementById('tree-depth').value);
             const branching = parseInt(document.getElementById('tree-branching').value);
             
+            // Build context from n-gram path (use last n-1 words)
+            const context = ngramPath.join(' ');
+            
             try {
-                const response = await fetch(`/api/tree?word=${encodeURIComponent(word)}&depth=${depth}&branching=${branching}`);
+                const response = await fetch(`/api/tree?word=${encodeURIComponent(word)}&depth=${depth}&branching=${branching}&context=${encodeURIComponent(context)}`);
                 const data = await response.json();
                 
                 if (data.error) {
@@ -370,6 +396,31 @@
                 console.error('Error loading tree:', error);
             }
         }
+        
+        // Update n-gram path display
+        function updateNgramPathDisplay() {
+            const pathEl = document.getElementById('ngram-path');
+            if (ngramPath.length === 0) {
+                pathEl.innerHTML = '<em class="text-muted">Click a word to start</em>';
+            } else {
+                pathEl.innerHTML = ngramPath.map((w, i) => 
+                    `<span class="badge bg-primary me-1">${w}</span>`
+                ).join('<i class="bi bi-arrow-right mx-1"></i>');
+            }
+        }
+        
+        // Reset n-gram path
+        function resetNgramPath() {
+            ngramPath = [];
+            currentWord = 'the';
+            updateNgramPathDisplay();
+            if (modelReady) {
+                updateTree('the', false);
+            }
+        }
+        
+        // Reset button handler
+        document.getElementById('reset-ngram-btn').addEventListener('click', resetNgramPath);
         
         // Tree controls change
         document.getElementById('tree-depth').addEventListener('change', () => updateTree(currentWord));
@@ -443,7 +494,7 @@
                         loadTopWords();
                         generateBtn.disabled = false;
                         predictBtn.disabled = false;
-                        updateTree('the');
+                        resetNgramPath();  // Start fresh
                     }
                 }
             } catch (error) {

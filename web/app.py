@@ -58,7 +58,8 @@ class TreeNode:
 
 
 def build_prediction_tree(model: NGramModel, start_word: str, 
-                          depth: int = 3, branching: int = 5) -> TreeNode:
+                          depth: int = 3, branching: int = 5,
+                          context: Optional[List[str]] = None) -> TreeNode:
     """
     Build a tree of predictions starting from a word.
     
@@ -73,11 +74,11 @@ def build_prediction_tree(model: NGramModel, start_word: str,
     """
     n = model.n
     
-    def build_node(context: tuple, current_depth: int) -> List[TreeNode]:
+    def build_node(ctx: tuple, current_depth: int) -> List[TreeNode]:
         if current_depth >= depth:
             return None
         
-        predictions = model.get_next_word_distribution(context, top_k=branching)
+        predictions = model.get_next_word_distribution(ctx, top_k=branching)
         
         children = []
         for word, prob in predictions:
@@ -85,26 +86,37 @@ def build_prediction_tree(model: NGramModel, start_word: str,
                 continue
             
             # Get count for this word in context
-            ngram = context + (word,)
+            ngram = ctx + (word,)
             count = model.ngram_counts.get(ngram, 0)
             
-            # Build new context for children
-            new_context = context[1:] + (word,) if len(context) >= n - 1 else context + (word,)
+            # Build new context for children (keep last n-1 words)
+            new_ctx = (ctx + (word,))[-(n-1):] if n > 1 else tuple()
             
             node = TreeNode(
                 word=word,
                 probability=prob,
                 count=count,
-                children=build_node(new_context, current_depth + 1)
+                children=build_node(new_ctx, current_depth + 1)
             )
             children.append(node)
         
         return children if children else None
     
-    # Initial context
-    initial_context = ('<s>',) * (n - 2) + (start_word,) if n > 1 else (start_word,)
-    if n == 1:
-        initial_context = tuple()
+    # Build initial context from provided context or default
+    if context and len(context) > 0:
+        # Use the provided context (last n-1 words for n-gram)
+        if n > 1:
+            initial_context = tuple(context[-(n-1):])
+            # Pad with start tokens if needed
+            if len(initial_context) < n - 1:
+                initial_context = ('<s>',) * (n - 1 - len(initial_context)) + initial_context
+        else:
+            initial_context = tuple()
+    else:
+        # Default: use start tokens + start_word
+        initial_context = ('<s>',) * (n - 2) + (start_word,) if n > 1 else tuple()
+        if n == 1:
+            initial_context = tuple()
     
     root = TreeNode(
         word=start_word,
@@ -303,12 +315,16 @@ def api_tree():
     start_word = request.args.get('word', 'the')
     depth = request.args.get('depth', 3, type=int)
     branching = request.args.get('branching', 5, type=int)
+    context_str = request.args.get('context', '')
+    
+    # Parse context from space-separated string
+    context = context_str.lower().split() if context_str.strip() else None
     
     # Limit depth and branching for performance
     depth = min(depth, 5)
     branching = min(branching, 10)
     
-    tree = build_prediction_tree(model, start_word, depth, branching)
+    tree = build_prediction_tree(model, start_word, depth, branching, context=context)
     
     return jsonify(tree.to_dict())
 
